@@ -1,9 +1,31 @@
 local lp = game:GetService("Players").LocalPlayer
 local CoreGui = game:GetService("CoreGui");
-local TS = game:GetService("TweenService")
+local TS = game:GetService("TweenService");
+
+local Lib = {
+    PrisonLife = loadstring(game:HttpGet"https://raw.githubusercontent.com/Ix1x0x3/game-libs/main/libs/prisonlife.lua")();
+    CHandler = loadstring(game:HttpGet("https://raw.githubusercontent.com/Ix1x0x3/IxAdmin/main/src/CommandHandler.lua"))();
+}
 
 local Temp = {
-    NotifCache = {}
+    NotifCache = {};
+    AdminsChecked = {};
+    AdminCHandlerInstances = {};
+    Commands = {
+        kill = {
+            ID = "kill";
+            Aliases = {
+                "kill"
+            };
+            Run = function(Self, Args)
+                print(Self, Args, Self.Name)
+            end
+        }
+    }
+}
+
+local Admins = {
+    lp;
 }
 
 local Modules = {
@@ -13,6 +35,25 @@ local Modules = {
 
     GithubImport = function(file)
         return loadstring( game:HttpGet("https://raw.githubusercontent.com/Ix1x0x3/IxAdmin/main/src/"..file..".lua") )
+    end;
+
+    UpdateAdmins = function()
+        for _,Admin in pairs(Admins) do
+            if not Temp.AdminsChecked[Admin.Name] then
+                
+                Temp.AdminsChecked[Admin.Name] = true;
+                Temp.AdminCHandlerInstances[Admin.Name] = Lib.CHandler.New(Admin, {
+                    Prefix = ""
+                })
+
+                for _,c in pairs(Temp.Commands) do
+                    Temp.AdminCHandlerInstances[Admin.Name]:AddCommand(_, c)
+                end
+
+                Temp.AdminCHandlerInstances[Admin.Name]:Listen()
+
+            end
+        end
     end;
 
     Notif = function(Txt, Time, Tag)
@@ -106,11 +147,5 @@ local Modules = {
 
         return res;
     end
-}
-
-local CommandHandler = Modules.GithubImport"CommandHandler"();
-
-local Lib = {
-    PrisonLife = loadstring(game:HttpGet"https://raw.githubusercontent.com/Ix1x0x3/game-libs/main/libs/prisonlife.lua")();
 }
 

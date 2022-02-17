@@ -5,7 +5,8 @@ function CmdHandler.New(Player, Options)
     local self = {}
     self.Master = Player;
     self.Prefix = Options.Prefix;
-    self.Commands = {}
+    self.Commands = {};
+    self.IgnoreCommands = {};
 
     return setmetatable(self, CmdHandler)
 end
