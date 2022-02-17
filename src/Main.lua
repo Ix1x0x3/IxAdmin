@@ -1,6 +1,7 @@
 local lp = game:GetService("Players").LocalPlayer
 local CoreGui = game:GetService("CoreGui");
 local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TS = game:GetService("TweenService");
 
 local Lib = {
@@ -12,17 +13,11 @@ local Temp = {
     NotifCache = {};
     AdminsChecked = {};
     AdminCHandlerInstances = {};
-    Commands = {
-        kill = {
-            ID = "kill";
-            Aliases = {
-                "kill"
-            };
-            Run = function(Self, Args)
-                print(Self, Args, Self.Name)
-            end
-        }
-    }
+    States = {
+        God = false;
+        KillAura = false;
+    };
+    Loopkill = {};
 }
 
 local Admins = {
@@ -156,7 +151,41 @@ local Modules = {
         local x={}
 
         for _,p in pairs(game.Players:GetChildren()) do
-            if string.match(p.Name:lower(), Data:lower()) or string.match(p.DisplayName:lower(), Data:lower()) then
+            if string.find(p.Name:lower(), Data:lower()) or string.find(p.DisplayName:lower(), Data:lower()) then
+                table.insert(x,p)
+            end
+        end
+
+        return x
+    end;
+
+    SearchForPlayer1 = function(Data, x)
+        if Data == "all" then
+            local o={};
+            for x,zz in pairs(game.Players:GetChildren()) do
+                table.insert(o,zz)
+            end
+            return (o)
+        end
+
+        if Data == "others" then
+            local o={};
+            for x,zz in pairs(game.Players:GetChildren()) do
+                if zz~=lp then
+                    table.insert(o,zz)
+                end
+            end
+            return (o)
+        end
+
+        if Data == "me" then
+            return {x};
+        end
+
+        local x={}
+
+        for _,p in pairs(game.Players:GetChildren()) do
+            if string.find(p.Name:lower(), Data:lower()) or string.find(p.DisplayName:lower(), Data:lower()) then
                 table.insert(x,p)
             end
         end
@@ -167,30 +196,52 @@ local Modules = {
     FormalTable = function(x)
         local res = "";
         for i,v in pairs(x) do
-            if i == #x-1 then
-                res ..= v..", and "
-                continue
+            if type(v) == "string" then
+                if i == #x-1 then
+                    res ..= v..", and "
+                    continue
+                end
+    
+                if i == #x then
+                    res ..= v
+                    continue
+                end
+    
+                res ..= v..", "
+            elseif v:IsA("Player") then
+                if i == #x-1 then
+                    res ..= v.Name..", and "
+                    continue
+                end
+    
+                if i == #x then
+                    res ..= v.Name
+                    continue
+                end
+    
+                res ..= v.Name..", "
             end
-
-            if i == #x then
-                res ..= v
-                continue
-            end
-
-            res ..= v..", "
         end
 
         return res;
+    end;
+
+    Chat = function(Text, Whisper)
+        if Whisper then
+            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer("/w " .. Whisper.Name .. " " .. Text, "All")
+        else
+            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(Text, "All")
+        end
     end
 }
 
-local Prefix = ">"
+local Prefix = ">>"
 
 local Commands = {}
 
 local function IsAdmin(Player)
 	for _,Admin in pairs (Admins) do
-		print(Admin,Player)
+		---print(Admin,Player)
 		if type(Admin) == "string" and string.lower(Admin) == string.lower(Player.Name) then
 			return true
 		elseif type(Admin) == "number" and Admin == Player.UserId then
@@ -227,7 +278,25 @@ local function ParseMessage(Player,Message)
             if CommandName:lower() == _:lower() then
 
                 CmdFound = true;
-                Command.Run(Player, Arguments)
+                local s,e = pcall(function()
+                    if Command.ownerOnly then
+                        if Player == lp then
+                            Command.Run(Player, Arguments)
+                        else
+                            Modules.Chat("You can't use this command.", Player)
+                        end
+                    else
+                        Command.Run(Player, Arguments)
+                    end
+                end)
+
+                if not s then
+                    if Player == lp then
+                        Modules.Notif("Error while running command \"".._.."\": "..e, 5, "System")
+                    else
+                        Modules.Chat("Error while running command \"".._.."\": "..e, Player)
+                    end
+                end;
                 break;
 
             else
@@ -237,7 +306,13 @@ local function ParseMessage(Player,Message)
                     if Alias:lower() == CommandName:lower() then
 
                         CmdFound = true;
-                        Command.Run(Player, Arguments)
+                        local s,e = pcall(function()
+                            Command.Run(Player, Arguments)
+                        end)
+        
+                        if not s then
+                            Modules.Notif("Error while running command \"".._.."\": "..e, 5, "System")
+                        end;
                         break;
 
                     end
@@ -250,7 +325,11 @@ local function ParseMessage(Player,Message)
 
         if not CmdFound then
             
-            return Modules.Notif("Command \""..CommandName.."\" didn't match any commands.", 3, "System")
+            if Player == lp then
+                return Modules.Notif("Command \""..CommandName.."\" didn't match any commands.", 3, "System")
+            else
+                return Modules.Chat("Command \""..CommandName.."\" didn't match any commands.", Player)
+            end
 
         end
 
@@ -285,22 +364,42 @@ Commands["kill"] = {
     },
     Run = function(Self, Args)
         
-        local Targets = Modules.SearchForPlayer(Args[1]:lower())
+        if Self == lp then
+            local Targets = Modules.SearchForPlayer(Args[1]:lower())
 
-        if Targets or #Targets > 0 then
-            
-            for _,Target in pairs(Targets) do
+            if Targets or #Targets > 0 then
                 
-                Lib.PrisonLife.KillPlayer(Target)
+                for _,Target in pairs(Targets) do
+                    
+                    Lib.PrisonLife.KillPlayer(Target)
+
+                end
+
+                Modules.Notif("Killed "..Modules.FormalTable(Targets)..".", 4, "System")
+
+            else
+
+                Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
 
             end
-
-            Modules.Notif("Killed "..Modules.FormalTable(Targets)..".", 4, "System")
-
         else
+            local Targets = Modules.SearchForPlayer(Args[1]:lower())
 
-            Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
+            if Targets or #Targets > 0 then
+                
+                for _,Target in pairs(Targets) do
+                    
+                    Lib.PrisonLife.KillPlayer(Target)
 
+                end
+
+                Modules.Chat("Killed "..Modules.FormalTable(Targets)..".", Self)
+
+            else
+
+                Modules.Chat("\""..Args[1]:lower().."\" matched no players.", Self)
+
+            end
         end
 
     end
@@ -311,11 +410,32 @@ Commands["re"] = {
         "respawn"
     },
     Info = {
-        D = "Respawns the player."
+        D = "Respawns the player.";
+        ownerOnly = true;
     },
     Run = function(Self, Args)
         
-        Lib.PrisonLife.Respawn()
+        local GunsHad = {}
+        for i, Tool in pairs(lp.Backpack:GetChildren()) do
+            if Tool:FindFirstChild("GunStates") then
+                table.insert(GunsHad, Tool.Name)
+            end
+        end
+
+        for i, Tool in pairs(lp.Character:GetChildren()) do
+            if Tool:FindFirstChild("GunStates") then
+                table.insert(GunsHad, Tool.Name)
+            end
+        end
+
+        local OldCF = Lib.PrisonLife.GetPos()
+        local OldCamCF = workspace.CurrentCamera.CFrame;
+        Lib.PrisonLife.LoadChr(Lib.PrisonLife.GetTeam())
+        Lib.PrisonLife.Goto(OldCF)
+        workspace.CurrentCamera.CFrame = OldCamCF
+        for i, OldTool in pairs(GunsHad) do
+            Lib.PrisonLife.GiveItem(OldTool)
+        end
 
     end
 }
@@ -325,7 +445,8 @@ Commands["guns"] = {
         "getguns"
     },
     Info = {
-        D = "Get all guns."
+        D = "Get all guns.";
+        ownerOnly = true;
     },
     Run = function(Self, Args)
         workspace.Remote.ItemHandler:InvokeServer(workspace.Prison_ITEMS.giver["Remington 870"].ITEMPICKUP)
@@ -342,26 +463,364 @@ Commands["tp"] = {
         D = "Teleports PlayerX to PlayerY."
     },
     Run = function(Self, Args)
-        local Plr1 = Modules.SearchForPlayer(Args[1]);
-        local Plr2 = Modules.SearchForPlayer(Args[2]);
-
-        if (Plr1 and Plr2) and (#Plr1 > 0 and #Plr2 > 0) then
-            for _,TargetX in pairs(Plr1) do
-                for _,TargetY in pairs(Plr2) do
-                    if TargetX == lp then
-                        lp.Character.HumanoidRootPart.CFrame = TargetY.Character.HumanoidRootPart.CFrame;
-                        continue;
-                    end
-    
-                    Lib.PrisonLife.TeleportPlayerTo(TargetX, TargetY.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,2));
-                end
+        if Self == lp then
+            if Args[1] == nil then
+                return Modules.Notif("Provide PlayerX!", 5, "System")
             end
-    
-            Modules.Notif("Teleported "..Modules.FormalTable(Plr1).." to "..Modules.FormalTable(Plr2)..".", 3, "System")
+
+            if Args[2] == nil then
+                return Modules.Notif("Provide PlayerY!", 5, "System")
+            end
+
+            local Plr1 = Modules.SearchForPlayer(Args[1]);
+            local Plr2 = Modules.SearchForPlayer(Args[2]);
+
+            if (Plr1 and Plr2) and (#Plr1 > 0 and #Plr2 > 0) then
+                for _,TargetX in pairs(Plr1) do
+                    for _,TargetY in pairs(Plr2) do
+                        if TargetX == lp then
+                            lp.Character.HumanoidRootPart.CFrame = TargetY.Character.HumanoidRootPart.CFrame;
+                            continue;
+                        end
+        
+                        Lib.PrisonLife.TeleportPlayerTo(TargetX, TargetY.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,2));
+                    end
+                end
+        
+                Modules.Notif("Teleported "..Modules.FormalTable(Plr1).." to "..Modules.FormalTable(Plr2)..".", 3, "System")
+            else
+
+                Modules.Notif("\""..Args[1]:lower().."\" and \""..Args[2]:lower().."\" matched no players.", 3, "System")
+
+            end
+        else
+            if Args[1] == nil then
+                return Modules.Chat("Provide PlayerX!", Self)
+            end
+
+            if Args[2] == nil then
+                return Modules.Chat("Provide PlayerY!", Self)
+            end
+
+            local Plr1 = Modules.SearchForPlayer1(Args[1], Self);
+            local Plr2 = Modules.SearchForPlayer1(Args[2], Self);
+
+            if (Plr1 and Plr2) and (#Plr1 > 0 and #Plr2 > 0) then
+                for _,TargetX in pairs(Plr1) do
+                    for _,TargetY in pairs(Plr2) do
+                        if TargetX == lp then
+                            lp.Character.HumanoidRootPart.CFrame = TargetY.Character.HumanoidRootPart.CFrame;
+                            continue;
+                        end
+        
+                        Lib.PrisonLife.TeleportPlayerTo(TargetX, TargetY.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,2));
+                    end
+                end
+        
+                Modules.Chat("Teleported "..Modules.FormalTable(Plr1).." to "..Modules.FormalTable(Plr2)..".", Self)
+            else
+
+                Modules.Chat("\""..Args[1]:lower().."\" and \""..Args[2]:lower().."\" matched no players.", Self)
+
+            end
+        end
+    end
+}
+
+Commands["god"] = {
+    Aliases = {
+        "godmode"
+    },
+    Info = {
+        D = "Gives you god mode, or instant respawns upon death.";
+        ownerOnly = true;
+    },
+    Run = function(Self, Args)
+        Temp.States.God = not Temp.States.God;
+        Modules.Notif("Set Temp.States.God to "..(Temp.States.God == true and "true" or "false")..".", 3, "System")
+    end
+}
+
+Commands["loopkill"] = {
+    Aliases = {
+        "lk"
+    },
+    Info = {
+        D = "Loopkills the target."
+    },
+    Run = function(Self, Args)
+        
+        if Self == lp then
+            local Targets = Modules.SearchForPlayer(Args[1]:lower())
+
+            if Targets or #Targets > 0 then
+                
+                for _,Target in pairs(Targets) do
+                    
+                    table.insert(Temp.Loopkill, Target)
+
+                end
+
+                Modules.Notif("Loopkilling "..Modules.FormalTable(Targets)..".", 4, "System")
+
+            else
+
+                Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
+
+            end
+        else
+            local Targets = Modules.SearchForPlayer1(Args[1]:lower(), Self)
+
+            if Targets or #Targets > 0 then
+                
+                for _,Target in pairs(Targets) do
+                    
+                    table.insert(Temp.Loopkill, Target)
+
+                end
+
+                Modules.Chat("Loopkilling "..Modules.FormalTable(Targets)..".", Self)
+
+            else
+
+                Modules.Chat("\""..Args[1]:lower().."\" matched no players.", Self)
+
+            end
+        end
+
+    end
+}
+
+Commands["unloopkill"] = {
+    Aliases = {
+        "unlk"
+    },
+    Info = {
+        D = "Unloopkills the target."
+    },
+    Run = function(Self, Args)
+        
+        if Self == lp then
+            local Targets = Modules.SearchForPlayer(Args[1]:lower())
+
+            if Targets or #Targets > 0 then
+                
+                for _,Target in pairs(Targets) do
+                    
+                    table.remove(Temp.Loopkill, table.find(Temp.Loopkill, Target))
+
+                end
+
+                Modules.Notif("Unloopkilled "..Modules.FormalTable(Targets)..".", 4, "System")
+
+            else
+
+                Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
+
+            end
+        else
+            local Targets = Modules.SearchForPlayer1(Args[1]:lower(), Self)
+
+            if Targets or #Targets > 0 then
+                
+                for _,Target in pairs(Targets) do
+                    
+                    table.remove(Temp.Loopkill, table.find(Temp.Loopkill, Target))
+
+                end
+
+                Modules.Chat("Unloopkilled "..Modules.FormalTable(Targets)..".", Self)
+
+            else
+
+                Modules.Chat("\""..Args[1]:lower().."\" matched no players.", Self)
+
+            end
+        end
+
+    end
+}
+
+Commands["admin"] = {
+    Aliases = {
+        "mod",
+        "rank",
+        "wl"
+    },
+    Info = {
+        D = "Gives the player access to admin.";
+        ownerOnly = true;
+    },
+    Run = function(Self, Args)
+        
+        local Targets = Modules.SearchForPlayer(Args[1]:lower())
+
+        if Targets or #Targets > 0 then
+            
+            for _,Target in pairs(Targets) do
+                
+                table.insert(Admins, Target.Name);
+                Modules.Chat("You've been ranked admin. Say >>cmds to view all commands.", Target)
+
+            end
+
+            Modules.Notif("Gave admin to "..Modules.FormalTable(Targets)..".", 4, "System")
+
         else
 
-            Modules.Notif("\""..Args[1]:lower().."\" and \""..Args[2]:lower().."\" matched no players.", 3, "System")
+            Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
+
+        end
+
+    end
+}
+
+Commands["unadmin"] = {
+    Aliases = {
+        "unmod",
+        "unrank",
+        "unwl",
+        "bl"
+    },
+    Info = {
+        D = "Removes the player from the \"Admins\" table.";
+        ownerOnly = true;
+    },
+    Run = function(Self, Args)
+        local Targets = Modules.SearchForPlayer(Args[1]:lower())
+
+        if Targets or #Targets > 0 then
+            
+            for _,Target in pairs(Targets) do
+                
+                table.remove(Admins, table.find(Admins, Target.Name))
+                Modules.Chat("You've been unranked.", Target)
+
+            end
+
+            Modules.Notif("Unloopkilled "..Modules.FormalTable(Targets)..".", 4, "System")
+
+        else
+
+            Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
 
         end
     end
 }
+
+Commands["cmds"] = {
+    Aliases = {
+        "commands"
+    },
+    Info = {
+        D = "Displays all commands."
+    },
+    Run = function(Self, Args)
+
+        local Res = {};
+        
+        for _,Command in pairs(Commands) do
+        
+            if Command.Info.ownerOnly == true then
+                if Self ~= lp then
+                    continue;
+                end
+            end
+
+            table.insert(Res, _)
+
+        end
+
+        if Self == lp then
+            game.StarterGui:SetCore("ChatMakeSystemMessage", {
+                Text = Modules.FormalTable(Res),
+                Color = Color3.new(1,1,1),
+                Font = Enum.Font.Code,
+                FontSize = Enum.FontSize.Size14
+            })
+        else
+            Modules.Chat(Modules.FormalTable(Res), Self)
+        end
+
+    end
+}
+
+game.Players.PlayerRemoving:Connect(function(player)
+    local b = table.find(Temp.Loopkill, player)
+
+    if b then
+        table.remove(Temp.Loopkill, b)
+        Modules.Notif("Loopkill victim \""..player.Name.."\" left. Removed from loopkill.")
+    end
+end)
+
+lp.CharacterAdded:Connect(function(character)
+    local hum = character:WaitForChild("Humanoid")
+
+    hum.Died:Connect(function()
+        local GunsHad = {}
+        for i, Tool in pairs(lp.Backpack:GetChildren()) do
+            if Tool:FindFirstChild("GunStates") then
+                table.insert(GunsHad, Tool.Name)
+            end
+        end
+        for i, Tool in pairs(lp.Character:GetChildren()) do
+            if Tool:FindFirstChild("GunStates") then
+                table.insert(GunsHad, Tool.Name)
+            end
+        end
+
+        local OldCF = Lib.PrisonLife.GetPos()
+        local OldCamCF = workspace.CurrentCamera.CFrame;
+        Lib.PrisonLife.LoadChr(Lib.PrisonLife.GetTeam())
+        Lib.PrisonLife.Goto(OldCF)
+        workspace.CurrentCamera.CFrame = OldCamCF
+        for i, OldTool in pairs(GunsHad) do
+            Lib.PrisonLife.GiveItem(OldTool)
+        end
+    end)
+end)
+
+spawn(function()
+    while task.wait() do
+        if lp.Character then
+            if lp.Character:FindFirstChildOfClass("Humanoid") then
+                local Hum = lp.Character:FindFirstChildOfClass("Humanoid")
+                if Hum and Hum.Health <= 5 and Temp.States.God then
+                    local GunsHad = {}
+                    for i, Tool in pairs(lp.Backpack:GetChildren()) do
+                        if Tool:FindFirstChild("GunStates") then
+                            table.insert(GunsHad, Tool.Name)
+                        end
+                    end
+
+                    for i, Tool in pairs(lp.Character:GetChildren()) do
+                        if Tool:FindFirstChild("GunStates") then
+                            table.insert(GunsHad, Tool.Name)
+                        end
+                    end
+
+                    local OldCF = Lib.PrisonLife.GetPos()
+                    local OldCamCF = workspace.CurrentCamera.CFrame;
+                    Lib.PrisonLife.LoadChr(Lib.PrisonLife.GetTeam())
+                    Lib.PrisonLife.Goto(OldCF)
+                    workspace.CurrentCamera.CFrame = OldCamCF
+                    for i, OldTool in pairs(GunsHad) do
+                        Lib.PrisonLife.GiveItem(OldTool)
+                    end
+                end
+            end
+
+            for _,LoopkillTarget in pairs(Temp.Loopkill) do
+                if LoopkillTarget.Character then
+                    if not LoopkillTarget.Character:FindFirstChildOfClass("ForceField") then
+                        local Hum = LoopkillTarget.Character:FindFirstChildOfClass("Humanoid")
+                        if Hum and Hum.Health > 0 then
+                            Lib.PrisonLife.KillPlayer(LoopkillTarget)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
