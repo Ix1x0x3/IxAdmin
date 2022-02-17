@@ -1,5 +1,6 @@
 local lp = game:GetService("Players").LocalPlayer
 local CoreGui = game:GetService("CoreGui");
+local ContentProvider = game:GetService("ContentProvider")
 local TS = game:GetService("TweenService");
 
 local Lib = {
@@ -73,7 +74,7 @@ local Modules = {
         Ntif.Font = Enum.Font.SourceSansSemibold;
         Ntif.AnchorPoint = Vector2.new(0.5, 0.5)
         Ntif.TextSize = 32;
-        Ntif.TextColor3 = Color3.new(1,1,1)
+        Ntif.TextColor3 = Color3.new(0.8,0.8,0.8)
 
         table.insert(Temp.NotifCache, Ntif)
 
@@ -86,17 +87,47 @@ local Modules = {
             }
         ):Play()
 
-        wait(Time or 5)
+        local CanLeave = false;
+        local IgnoreDelay = false;
 
-        TS:Create(
-            Ntif,
-            TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
-            {
-                TextTransparency = 1;
-                Position = UDim2.new(0.5, 0, 0.9, 0);
-            }
-        ):Play()
-        table.remove(Temp.NotifCache, table.find(Temp.NotifCache, Ntif))
+        Ntif.MouseEnter:Connect(function()
+            CanLeave = true
+            Ntif.TextColor3 = Color3.new(1,1,1)
+        end)
+
+        Ntif.MouseLeave:Connect(function()
+            CanLeave = false;
+            Ntif.TextColor3 = Color3.new(0.8,0.8,0.8)
+        end)
+
+        lp:GetMouse().Button1Down:Connect(function()
+            if CanLeave then
+                IgnoreDelay = true;
+                TS:Create(
+                    Ntif,
+                    TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+                    {
+                        TextTransparency = 1;
+                        Position = UDim2.new(0.5, 0, 0.9, 0);
+                    }
+                ):Play()
+                table.remove(Temp.NotifCache, table.find(Temp.NotifCache, Ntif))
+            end
+        end)
+
+        delay(Time or 5, function()
+            if not IgnoreDelay then
+                TS:Create(
+                    Ntif,
+                    TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+                    {
+                        TextTransparency = 1;
+                        Position = UDim2.new(0.5, 0, 0.9, 0);
+                    }
+                ):Play()
+                table.remove(Temp.NotifCache, table.find(Temp.NotifCache, Ntif))
+            end
+        end)
     end;
 
     SearchForPlayer = function(Data)
@@ -116,6 +147,10 @@ local Modules = {
                 end
             end
             return (o)
+        end
+
+        if Data == "me" then
+            return {lp};
         end
 
         local x={}
@@ -153,12 +188,6 @@ local Prefix = ">"
 
 local Commands = {}
 
-Commands.print = function(Sender,Arguments)
-	local Message = table.concat(Arguments," ")
-	Modules.Notif("From " ..Sender.Name..":\n"..Message)
-    Modules.Notif("Test Formal "..Modules.FormalTable({"Someone", "Idk", "But",'Hi'}))
-end
-
 local function IsAdmin(Player)
 	for _,Admin in pairs (Admins) do
 		print(Admin,Player)
@@ -190,11 +219,41 @@ local function ParseMessage(Player,Message)
 		
 		local CommandName = Arguments[1]
 		table.remove(Arguments,1)
-		local CommandFunc = Commands[CommandName]
+
+        local CmdFound = false;
 		
-		if CommandFunc ~= nil then
-			CommandFunc(Player,Arguments)
-		end
+        for _,Command in pairs(Commands) do
+            
+            if CommandName:lower() == _:lower() then
+
+                CmdFound = true;
+                Command.Run(Player, Arguments)
+                break;
+
+            else
+
+                for _,Alias in pairs(Command.Aliases) do
+                    
+                    if Alias:lower() == CommandName:lower() then
+
+                        CmdFound = true;
+                        Command.Run(Player, Arguments)
+                        break;
+
+                    end
+
+                end
+
+            end
+
+        end
+
+        if not CmdFound then
+            
+            return Modules.Notif("Command \""..CommandName.."\" didn't match any commands.", 3, "System")
+
+        end
+
 	end
 end
 
@@ -205,3 +264,104 @@ for _,Player in pairs(game.Players:GetChildren()) do
         end
     end)
 end
+
+game.Players.PlayerAdded:Connect(function(Player)
+    Player.Chatted:Connect(function(Msg)
+        if IsAdmin(Player) then
+            ParseMessage(Player, Msg)
+        end
+    end)
+end)
+
+Modules.Notif("Loaded", 5, "System")
+
+Commands["kill"] = {
+    Aliases = {
+        "oof",
+        "end"
+    },
+    Info = {
+        D = "Kills the target."
+    },
+    Run = function(Self, Args)
+        
+        local Targets = Modules.SearchForPlayer(Args[1]:lower())
+
+        if Targets or #Targets > 0 then
+            
+            for _,Target in pairs(Targets) do
+                
+                Lib.PrisonLife.KillPlayer(Target)
+
+            end
+
+            Modules.Notif("Killed "..Modules.FormalTable(Targets)..".", 4, "System")
+
+        else
+
+            Modules.Notif("\""..Args[1]:lower().."\" matched no players.", 3, "System")
+
+        end
+
+    end
+}
+
+Commands["re"] = {
+    Aliases = {
+        "respawn"
+    },
+    Info = {
+        D = "Respawns the player."
+    },
+    Run = function(Self, Args)
+        
+        Lib.PrisonLife.Respawn()
+
+    end
+}
+
+Commands["guns"] = {
+    Aliases = {
+        "getguns"
+    },
+    Info = {
+        D = "Get all guns."
+    },
+    Run = function(Self, Args)
+        workspace.Remote.ItemHandler:InvokeServer(workspace.Prison_ITEMS.giver["Remington 870"].ITEMPICKUP)
+        workspace.Remote.ItemHandler:InvokeServer(workspace.Prison_ITEMS.giver["M9"].ITEMPICKUP)
+        workspace.Remote.ItemHandler:InvokeServer(workspace.Prison_ITEMS.giver["AK-47"].ITEMPICKUP)
+    end
+}
+
+Commands["tp"] = {
+    Aliases = {
+        "teleport"
+    },
+    Info = {
+        D = "Teleports PlayerX to PlayerY."
+    },
+    Run = function(Self, Args)
+        local Plr1 = Modules.SearchForPlayer(Args[1]);
+        local Plr2 = Modules.SearchForPlayer(Args[2]);
+
+        if (Plr1 and Plr2) and (#Plr1 > 0 and #Plr2 > 0) then
+            for _,TargetX in pairs(Plr1) do
+                for _,TargetY in pairs(Plr2) do
+                    if TargetX == lp then
+                        lp.Character.HumanoidRootPart.CFrame = TargetY.Character.HumanoidRootPart.CFrame;
+                        continue;
+                    end
+    
+                    Lib.PrisonLife.TeleportPlayerTo(TargetX, TargetY.Character.HumanoidRootPart.CFrame * CFrame.new(0,0,2));
+                end
+            end
+    
+            Modules.Notif("Teleported "..Modules.FormalTable(Plr1).." to "..Modules.FormalTable(Plr2)..".", 3, "System")
+        else
+
+            Modules.Notif("\""..Args[1]:lower().."\" and \""..Args[2]:lower().."\" matched no players.", 3, "System")
+
+        end
+    end
+}
