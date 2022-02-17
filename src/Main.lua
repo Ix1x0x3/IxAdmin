@@ -25,7 +25,7 @@ local Temp = {
 }
 
 local Admins = {
-    lp;
+    lp.UserId;
 }
 
 local Modules = {
@@ -149,4 +149,59 @@ local Modules = {
     end
 }
 
-Modules.Notif("Nigger")
+local Prefix = ">"
+
+local Commands = {}
+
+Commands.print = function(Sender,Arguments)
+	local Message = table.concat(Arguments," ")
+	Modules.Notif("From " ..Sender.Name..":\n"..Message)
+    Modules.Notif("Test Formal "..Modules.FormalTable({"Someone", "Idk", "But",'Hi'}))
+end
+
+local function IsAdmin(Player)
+	for _,Admin in pairs (Admins) do
+		print(Admin,Player)
+		if type(Admin) == "string" and string.lower(Admin) == string.lower(Player.Name) then
+			return true
+		elseif type(Admin) == "number" and Admin == Player.UserId then
+			return true
+		--[[elseif type(Admin) == "table" then
+			local Rank = Player:GetRankInGroup(Admin.GroupId)
+			if Rank >= (Admin.RankId or 1) then
+				return true
+			end]]
+		end
+	end
+	return false
+end
+
+local function ParseMessage(Player,Message)
+	Message = string.lower(Message)
+	local PrefixMatch = string.match(Message,"^"..Prefix)
+	
+	if PrefixMatch then
+		Message = string.gsub(Message,PrefixMatch,"",1)
+		local Arguments = {}
+		
+		for Argument in string.gmatch(Message,"[^%s]+") do
+			table.insert(Arguments,Argument)
+		end
+		
+		local CommandName = Arguments[1]
+		table.remove(Arguments,1)
+		local CommandFunc = Commands[CommandName]
+		
+		if CommandFunc ~= nil then
+			CommandFunc(Player,Arguments)
+		end
+	end
+end
+
+for _,Player in pairs(game.Players:GetChildren()) do
+    Player.Chatted:Connect(function(Msg)
+        if IsAdmin(Player) then
+            ParseMessage(Player, Msg)
+        end
+    end)
+end
