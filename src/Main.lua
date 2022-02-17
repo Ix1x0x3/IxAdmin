@@ -11,6 +11,10 @@ local Modules = {
         return loadstring(game:HttpGet(raw))
     end;
 
+    GithubImport = function(file)
+        return loadstring( game:HttpGet("https://raw.githubusercontent.com/Ix1x0x3/IxAdmin/main/src/"..file..".lua") )
+    end;
+
     Notif = function(Txt, Time, Tag)
         local NotifGui = CoreGui:FindFirstChild("IXADMIN_NGUI");
 
@@ -104,39 +108,9 @@ local Modules = {
     end
 }
 
-local Eurus = loadstring(game:HttpGet"https://raw.githubusercontent.com/Ix1x0x3/eurus/main/src/index.lua")();
+local CommandHandler = Modules.GithubImport"CommandHandler"();
 
 local Lib = {
     PrisonLife = loadstring(game:HttpGet"https://raw.githubusercontent.com/Ix1x0x3/game-libs/main/libs/prisonlife.lua")();
 }
 
-Eurus:AddCommand("kill", {
-    "end",
-    "oof"
-}, {
-    Description = "Kills the specified target."
-}, function(Self, Args)
-    Modules.Notif(Args[1])
-
-    if Args[1] then
-        local Targets = Modules.GetPlayer(Args[1])
-
-        if #Targets == 0 then
-            return Modules.Notif("Your search query matched no players.");
-        end
-
-        for i,Target in pairs(Targets) do
-            Lib.PrisonLife.KillPlayer(Target)
-        end
-
-        return Modules.Notif("Killed "..Modules.FormalTable(Targets)..".")
-    else
-        return Modules.Notif("Invalid arguments, provide a player please.");
-    end
-end)
-
-Modules.Notif(
-    "Loaded.",
-    5,
-    "IxAdmin"
-)
