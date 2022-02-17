@@ -149,3 +149,4 @@ local Modules = {
     end
 }
 
+Modules.Notif("Nigger")
