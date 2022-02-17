@@ -116,6 +116,8 @@ Eurus:AddCommand("kill", {
 }, {
     Description = "Kills the specified target."
 }, function(Self, Args)
+    Modules.Notif(Args[1])
+
     if Args[1] then
         local Targets = Modules.GetPlayer(Args[1])
 
