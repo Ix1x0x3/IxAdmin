@@ -783,44 +783,46 @@ end)
 
 spawn(function()
     while task.wait() do
-        if lp.Character then
-            if lp.Character:FindFirstChildOfClass("Humanoid") then
-                local Hum = lp.Character:FindFirstChildOfClass("Humanoid")
-                if Hum and Hum.Health <= 5 and Temp.States.God then
-                    local GunsHad = {}
-                    for i, Tool in pairs(lp.Backpack:GetChildren()) do
-                        if Tool:FindFirstChild("GunStates") then
-                            table.insert(GunsHad, Tool.Name)
+        local s,e = pcall(function()
+            if lp.Character then
+                if lp.Character:FindFirstChildOfClass("Humanoid") then
+                    local Hum = lp.Character:FindFirstChildOfClass("Humanoid")
+                    if Hum and Hum.Health <= 5 and Temp.States.God then
+                        local GunsHad = {}
+                        for i, Tool in pairs(lp.Backpack:GetChildren()) do
+                            if Tool:FindFirstChild("GunStates") then
+                                table.insert(GunsHad, Tool.Name)
+                            end
                         end
-                    end
-
-                    for i, Tool in pairs(lp.Character:GetChildren()) do
-                        if Tool:FindFirstChild("GunStates") then
-                            table.insert(GunsHad, Tool.Name)
+    
+                        for i, Tool in pairs(lp.Character:GetChildren()) do
+                            if Tool:FindFirstChild("GunStates") then
+                                table.insert(GunsHad, Tool.Name)
+                            end
                         end
-                    end
-
-                    local OldCF = Lib.PrisonLife.GetPos()
-                    local OldCamCF = workspace.CurrentCamera.CFrame;
-                    Lib.PrisonLife.LoadChr(Lib.PrisonLife.GetTeam())
-                    Lib.PrisonLife.Goto(OldCF)
-                    workspace.CurrentCamera.CFrame = OldCamCF
-                    for i, OldTool in pairs(GunsHad) do
-                        Lib.PrisonLife.GiveItem(OldTool)
-                    end
-                end
-            end
-
-            for _,LoopkillTarget in pairs(Temp.Loopkill) do
-                if LoopkillTarget.Character then
-                    if not LoopkillTarget.Character:FindFirstChildOfClass("ForceField") then
-                        local Hum = LoopkillTarget.Character:FindFirstChildOfClass("Humanoid")
-                        if Hum and Hum.Health > 0 then
-                            Lib.PrisonLife.KillPlayer(LoopkillTarget)
+    
+                        local OldCF = Lib.PrisonLife.GetPos()
+                        local OldCamCF = workspace.CurrentCamera.CFrame;
+                        Lib.PrisonLife.LoadChr(Lib.PrisonLife.GetTeam())
+                        Lib.PrisonLife.Goto(OldCF)
+                        workspace.CurrentCamera.CFrame = OldCamCF
+                        for i, OldTool in pairs(GunsHad) do
+                            Lib.PrisonLife.GiveItem(OldTool)
                         end
                     end
                 end
+    
+                for _,LoopkillTarget in pairs(Temp.Loopkill) do
+                    if LoopkillTarget.Character then
+                        if not LoopkillTarget.Character:FindFirstChildOfClass("ForceField") then
+                            local Hum = LoopkillTarget.Character:FindFirstChildOfClass("Humanoid")
+                            if Hum and Hum.Health > 0 then
+                                Lib.PrisonLife.KillPlayer(LoopkillTarget)
+                            end
+                        end
+                    end
+                end
             end
-        end
+        end)
     end
 end)
